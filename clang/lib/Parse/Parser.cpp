@@ -1248,13 +1248,6 @@ Parser::DeclGroupPtrTy Parser::ParseDeclOrFunctionDefInternal(
 Parser::DeclGroupPtrTy Parser::ParseDeclarationOrFunctionDefinition(
     ParsedAttributes &Attrs, ParsedAttributes &DeclSpecAttrs,
     ParsingDeclSpec *DS, AccessSpecifier AS) {
-  // Add an enclosing time trace scope for a bunch of small scopes with
-  // "EvaluateAsConstExpr".
-  llvm::TimeTraceScope TimeScope("ParseDeclarationOrFunctionDefinition", [&]() {
-    return Tok.getLocation().printToString(
-        Actions.getASTContext().getSourceManager());
-  });
-
   if (DS) {
     return ParseDeclOrFunctionDefInternal(Attrs, DeclSpecAttrs, *DS, AS);
   } else {
