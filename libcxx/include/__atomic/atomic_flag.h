@@ -13,10 +13,8 @@
 #include <__atomic/contention_t.h>
 #include <__atomic/memory_order.h>
 #include <__atomic/support.h>
-#include <__chrono/duration.h>
 #include <__config>
 #include <__memory/addressof.h>
-#include <__thread/support.h>
 #include <cstdint>
 
 #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
