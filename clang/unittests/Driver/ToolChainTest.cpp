@@ -820,8 +820,8 @@ TEST(ToolChainTest, ConfigInexistentInclude) {
 
 #ifdef _WIN32
   const char *TestRoot = "C:\\";
-#define USERCONFIG "C:\\home\\user\\test.cfg"
-#define UNEXISTENT "C:\\home\\user\\file.rsp"
+#define USERCONFIG "C:/home/user/test.cfg"
+#define UNEXISTENT "C:/home/user/file.rsp"
 #else
   const char *TestRoot = "/";
 #define USERCONFIG "/home/user/test.cfg"
@@ -840,10 +840,14 @@ TEST(ToolChainTest, ConfigInexistentInclude) {
     ASSERT_TRUE(C);
     ASSERT_TRUE(C->containsError());
     EXPECT_EQ(1U, DiagConsumer->Errors.size());
+    // Normalize path separators to '/' to ensure robust comparison on Windows,
+    // as the actual separator depends on LLVM_WINDOWS_PREFER_FORWARD_SLASH.
+    std::string Error(DiagConsumer->Errors[0]);
+    llvm::replace(Error, '\\', '/');
     EXPECT_STRCASEEQ("cannot read configuration file '" USERCONFIG
                      "': cannot not open file '" UNEXISTENT
                      "': no such file or directory",
-                     DiagConsumer->Errors[0].c_str());
+                     Error.c_str());
   }
 
 #undef USERCONFIG
@@ -860,8 +864,8 @@ TEST(ToolChainTest, ConfigRecursiveInclude) {
 
 #ifdef _WIN32
   const char *TestRoot = "C:\\";
-#define USERCONFIG "C:\\home\\user\\test.cfg"
-#define INCLUDED1 "C:\\home\\user\\file1.cfg"
+#define USERCONFIG "C:/home/user/test.cfg"
+#define INCLUDED1 "C:/home/user/file1.cfg"
 #else
   const char *TestRoot = "/";
 #define USERCONFIG "/home/user/test.cfg"
@@ -886,9 +890,13 @@ TEST(ToolChainTest, ConfigRecursiveInclude) {
     ASSERT_TRUE(C);
     ASSERT_TRUE(C->containsError());
     EXPECT_EQ(1U, DiagConsumer->Errors.size());
+    // Normalize path separators to '/' to ensure robust comparison on Windows,
+    // as the actual separator depends on LLVM_WINDOWS_PREFER_FORWARD_SLASH.
+    std::string Error(DiagConsumer->Errors[0]);
+    llvm::replace(Error, '\\', '/');
     EXPECT_STREQ("cannot read configuration file '" USERCONFIG
                  "': recursive expansion of: '" INCLUDED1 "'",
-                 DiagConsumer->Errors[0].c_str());
+                 Error.c_str());
   }
 
 #undef USERCONFIG
