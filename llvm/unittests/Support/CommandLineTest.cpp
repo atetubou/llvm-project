@@ -20,6 +20,8 @@
 #include "llvm/Support/StringSaver.h"
 #include "llvm/Support/VirtualFileSystem.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <string>
 #include "llvm/TargetParser/Host.h"
 #include "llvm/TargetParser/Triple.h"
 #include "llvm/Testing/Support/SupportHelpers.h"
@@ -1072,7 +1074,13 @@ TEST(CommandLineTest, RecursiveResponseFiles) {
   ASSERT_FALSE((bool)EC);
   std::string ExpectedMessage =
       std::string("recursive expansion of: '") + std::string(FilePath) + "'";
-  ASSERT_TRUE(toString(std::move(Err)) == ExpectedMessage);
+  // Normalize path separators to '/' to ensure robust comparison on Windows,
+  // as the actual separator depends on LLVM_WINDOWS_PREFER_FORWARD_SLASH.
+  std::string ActualMessage = toString(std::move(Err));
+  std::replace(ActualMessage.begin(), ActualMessage.end(), '\\', '/');
+  std::string NormalizedExpectedMessage = ExpectedMessage;
+  std::replace(NormalizedExpectedMessage.begin(), NormalizedExpectedMessage.end(), '\\', '/');
+  EXPECT_EQ(ActualMessage, NormalizedExpectedMessage);
 
   EXPECT_THAT(Argv,
               testing::Pointwise(StringEquality(),
