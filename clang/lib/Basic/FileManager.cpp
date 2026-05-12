@@ -218,9 +218,23 @@ llvm::Expected<FileEntryRef> FileManager::getFileRef(StringRef Filename,
   auto SeenFileInsertResult =
       SeenFileEntries.insert({Filename, std::errc::no_such_file_or_directory});
   if (!SeenFileInsertResult.second) {
-    if (!SeenFileInsertResult.first->second)
+    if (!SeenFileInsertResult.first->second) {
+      // If there is a cached failure for a relative query path, try to resolve it
+      // using its absolute path in case the file has since been registered as
+      // a virtual file (e.g. embedded PCM headers during modules import).
+      SmallString<256> AbsPath(Filename);
+      makeAbsolutePath(AbsPath);
+      llvm::sys::path::remove_dots(AbsPath, true);
+      if (AbsPath != Filename) {
+        auto It = SeenFileEntries.find(AbsPath);
+        if (It != SeenFileEntries.end() && It->second) {
+          SeenFileInsertResult.first->second = It->second; // Override failure cache.
+          return FileEntryRef(*SeenFileInsertResult.first);
+        }
+      }
       return llvm::errorCodeToError(
           SeenFileInsertResult.first->second.getError());
+    }
     return FileEntryRef(*SeenFileInsertResult.first);
   }
 
@@ -260,6 +274,19 @@ llvm::Expected<FileEntryRef> FileManager::getFileRef(StringRef Filename,
                                 openFile ? &F : nullptr, IsText);
   if (statError) {
     // There's no real file at the given path.
+    // Fall back to resolve relative path queries using their absolute paths,
+    // in case a virtual file has already been registered under an absolute path
+    // (e.g. embedded PCM headers resolved to CWD under home-is-cwd).
+    SmallString<256> AbsPath(Filename);
+    makeAbsolutePath(AbsPath);
+    llvm::sys::path::remove_dots(AbsPath, true);
+    if (AbsPath != Filename) {
+      auto It = SeenFileEntries.find(AbsPath);
+      if (It != SeenFileEntries.end() && It->second) {
+        return FileEntryRef(*It);
+      }
+    }
+
     if (CacheFailure)
       NamedFileEnt->second = statError;
     else

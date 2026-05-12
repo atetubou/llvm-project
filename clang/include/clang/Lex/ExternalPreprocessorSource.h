@@ -13,6 +13,7 @@
 #ifndef LLVM_CLANG_LEX_EXTERNALPREPROCESSORSOURCE_H
 #define LLVM_CLANG_LEX_EXTERNALPREPROCESSORSOURCE_H
 
+#include "llvm/ADT/StringRef.h"
 #include <cassert>
 #include <cstdint>
   
@@ -43,6 +44,12 @@ public:
 
   /// Map a module ID to a module.
   virtual Module *getModule(unsigned ModuleID) = 0;
+
+  /// Lookup and load the input file information for the given filename.
+  /// Returns true if the file was found and registered as a virtual file.
+  virtual bool lookupAndLoadFileInfo(llvm::StringRef Filename) {
+    return false;
+  }
 };
 
 // Either a pointer to an IdentifierInfo of the controlling macro or the ID

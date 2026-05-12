@@ -451,13 +451,29 @@ OptionalFileEntryRef HeaderSearch::getFileAndSuggestModule(
     bool IsSystemHeaderDir, Module *RequestingModule,
     ModuleMap::KnownHeader *SuggestedModule, bool OpenFile /*=true*/,
     bool CacheFailures /*=true*/) {
-  // If we have a module map that might map this header, load it and
-  // check whether we'll have a suggestion for a module.
-  auto File = getFileMgr().getFileRef(FileName, OpenFile, CacheFailures);
-  if (!File) {
-    // For rare, surprising errors (e.g. "out of file handles"), diag the EC
-    // message.
-    std::error_code EC = llvm::errorToErrorCode(File.takeError());
+  auto FileOrErr = getFileMgr().getFileRef(FileName, OpenFile, CacheFailures);
+  if (!FileOrErr) {
+    llvm::Error Err = FileOrErr.takeError();
+    if (ExternalLookup) {
+      // If the physical file is missing, try on-demand loading the file from
+      // loaded PCM modules (where the header might be embedded).
+      if (ExternalLookup->lookupAndLoadFileInfo(FileName)) {
+        (void)llvm::errorToErrorCode(std::move(Err)); // Consume the old error.
+        // Retry resolving after successful on-demand registration. Use a separate
+        // Expected variable to avoid violating the one-time consumption rule of Expected.
+        auto FileOrErr2 = getFileMgr().getFileRef(FileName, OpenFile, CacheFailures);
+        if (FileOrErr2) {
+          if (!findUsableModuleForHeader(
+                  *FileOrErr2, Dir ? Dir : FileOrErr2->getFileEntry().getDir(), RequestingModule,
+                  SuggestedModule, IsSystemHeaderDir))
+            return std::nullopt;
+          return *FileOrErr2;
+        } else {
+          Err = FileOrErr2.takeError();
+        }
+      }
+    }
+    std::error_code EC = llvm::errorToErrorCode(std::move(Err));
     if (EC != llvm::errc::no_such_file_or_directory &&
         EC != llvm::errc::invalid_argument &&
         EC != llvm::errc::is_a_directory && EC != llvm::errc::not_a_directory) {
@@ -469,11 +485,11 @@ OptionalFileEntryRef HeaderSearch::getFileAndSuggestModule(
 
   // If there is a module that corresponds to this header, suggest it.
   if (!findUsableModuleForHeader(
-          *File, Dir ? Dir : File->getFileEntry().getDir(), RequestingModule,
+          *FileOrErr, Dir ? Dir : FileOrErr->getFileEntry().getDir(), RequestingModule,
           SuggestedModule, IsSystemHeaderDir))
     return std::nullopt;
 
-  return *File;
+  return *FileOrErr;
 }
 
 /// LookupFile - Lookup the specified file in this search path, returning it

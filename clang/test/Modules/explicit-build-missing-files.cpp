@@ -37,12 +37,20 @@
 // RUN: %clang_cc1 -fmodules -I %t -fmodule-file=%t/a.pcm -fmodule-map-file=%t/modulemap.moved -std=c++1z -Wno-module-file-config-mismatch %s -Db=a
 // RUN: rm %t/a.h
 // RUN: %clang_cc1 -fmodules -I %t -fmodule-file=%t/a.pcm %s -verify
-// RUN: %clang_cc1 -fmodules -I %t -fmodule-file=%t/b.pcm %s -verify
+// RUN: %clang_cc1 -fmodules -I %t -fmodule-file=%t/b.pcm %s -verify -DEMBEDDED
 
 // Oftentimes on Windows there are open handles, and deletion will fail.
 // REQUIRES: can-remove-opened-file
 
+#ifdef EMBEDDED
+// expected-no-diagnostics
+#endif
+
+#ifndef EMBEDDED
 #include "a.h" // expected-error {{file not found}}
+#else
+#include "a.h"
+#endif
 int x = b;
 
 #ifdef ERRORS

@@ -7193,6 +7193,33 @@ HeaderFileInfo ASTReader::GetHeaderFileInfo(FileEntryRef FE) {
   return HeaderFileInfo();
 }
 
+/// Scans the input files of all loaded modules and eagerly loads the matching
+/// file as a virtual file when requested during on-demand header search.
+/// Returns true if the file was found and registered.
+bool ASTReader::lookupAndLoadFileInfo(llvm::StringRef Filename) {
+  SmallString<256> AbsPath(Filename);
+  FileMgr.makeAbsolutePath(AbsPath);
+  llvm::sys::path::remove_dots(AbsPath, true);
+
+  for (ModuleFile &F : ModuleMgr) {
+    for (unsigned I = 0, N = F.InputFilesLoaded.size(); I != N; ++I) {
+      InputFileInfo IFI = getInputFileInfo(F, I + 1);
+      SmallString<0> LocalPathBuf;
+      LocalPathBuf.reserve(256);
+      auto InputFilename = ResolveImportedPath(LocalPathBuf, IFI.UnresolvedImportedFilenameAsRequested, F);
+      SmallString<256> AbsInputPath(*InputFilename);
+      FileMgr.makeAbsolutePath(AbsInputPath);
+      llvm::sys::path::remove_dots(AbsInputPath, true);
+
+      if (AbsInputPath == AbsPath) {
+        (void)getInputFile(F, I + 1, /*Complain=*/false);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void ASTReader::ReadPragmaDiagnosticMappings(DiagnosticsEngine &Diag) {
   using DiagState = DiagnosticsEngine::DiagState;
   SmallVector<DiagState *, 32> DiagStates;

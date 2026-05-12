@@ -2046,6 +2046,10 @@ public:
   /// Read the header file information for the given file entry.
   HeaderFileInfo GetHeaderFileInfo(FileEntryRef FE) override;
 
+  /// Lookup and load the input file information for the given filename.
+  /// Returns true if the file was found and registered as a virtual file.
+  bool lookupAndLoadFileInfo(llvm::StringRef Filename) override;
+
   void ReadPragmaDiagnosticMappings(DiagnosticsEngine &Diag);
 
   /// Returns the number of source locations found in the chain.
