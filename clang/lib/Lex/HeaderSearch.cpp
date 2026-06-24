@@ -2345,18 +2345,25 @@ void HeaderSearch::collectAllModules(SmallVectorImpl<Module *> &Modules) {
 
         // Search each of the ".framework" directories to load them as modules.
         llvm::vfs::FileSystem &FS = FileMgr.getVirtualFileSystem();
+        SmallVector<std::string, 16> FrameworkDirs;
         for (llvm::vfs::directory_iterator Dir = FS.dir_begin(DirNative, EC),
                                            DirEnd;
              Dir != DirEnd && !EC; Dir.increment(EC)) {
-          if (llvm::sys::path::extension(Dir->path()) != ".framework")
+          FrameworkDirs.push_back(std::string(Dir->path()));
+        }
+        llvm::sort(FrameworkDirs, [](StringRef A, StringRef B) {
+          return A.compare_insensitive(B) < 0;
+        });
+        for (const std::string &Path : FrameworkDirs) {
+          if (llvm::sys::path::extension(Path) != ".framework")
             continue;
 
-          auto FrameworkDir = FileMgr.getOptionalDirectoryRef(Dir->path());
+          auto FrameworkDir = FileMgr.getOptionalDirectoryRef(Path);
           if (!FrameworkDir)
             continue;
 
           // Load this framework module.
-          loadFrameworkModule(llvm::sys::path::stem(Dir->path()), *FrameworkDir,
+          loadFrameworkModule(llvm::sys::path::stem(Path), *FrameworkDir,
                               IsSystem, /*ImplicitlyDiscovered=*/true);
         }
         continue;
@@ -2410,14 +2417,21 @@ void HeaderSearch::loadSubdirectoryModuleMaps(DirectoryLookup &SearchDir) {
   SmallString<128> DirNative;
   llvm::sys::path::native(Dir, DirNative);
   llvm::vfs::FileSystem &FS = FileMgr.getVirtualFileSystem();
+  SmallVector<std::pair<std::string, llvm::sys::fs::file_type>, 16> Entries;
   for (llvm::vfs::directory_iterator Dir = FS.dir_begin(DirNative, EC), DirEnd;
        Dir != DirEnd && !EC; Dir.increment(EC)) {
-    if (Dir->type() == llvm::sys::fs::file_type::regular_file)
+    Entries.push_back({std::string(Dir->path()), Dir->type()});
+  }
+  llvm::sort(Entries, [](const auto &A, const auto &B) {
+    return StringRef(A.first).compare_insensitive(B.first) < 0;
+  });
+  for (const auto &Entry : Entries) {
+    if (Entry.second == llvm::sys::fs::file_type::regular_file)
       continue;
-    bool IsFramework = llvm::sys::path::extension(Dir->path()) == ".framework";
+    bool IsFramework = llvm::sys::path::extension(Entry.first) == ".framework";
     if (IsFramework == SearchDir.isFramework())
       parseAndLoadModuleMapFile(
-          Dir->path(), SearchDir.isSystemHeaderDirectory(),
+          Entry.first, SearchDir.isSystemHeaderDirectory(),
           /*ImplicitlyDiscovered=*/true, SearchDir.isFramework());
   }
 

@@ -1264,14 +1264,21 @@ Module *ModuleMap::inferFrameworkModule(DirectoryEntryRef FrameworkDir,
   llvm::sys::path::append(SubframeworksDirName, "Frameworks");
   llvm::sys::path::native(SubframeworksDirName);
   llvm::vfs::FileSystem &FS = FileMgr.getVirtualFileSystem();
+  SmallVector<std::string, 16> Subframeworks;
   for (llvm::vfs::directory_iterator
            Dir = FS.dir_begin(SubframeworksDirName, EC),
            DirEnd;
        Dir != DirEnd && !EC; Dir.increment(EC)) {
-    if (!StringRef(Dir->path()).ends_with(".framework"))
+    Subframeworks.push_back(std::string(Dir->path()));
+  }
+  llvm::sort(Subframeworks, [](StringRef A, StringRef B) {
+    return A.compare_insensitive(B) < 0;
+  });
+  for (const std::string &Path : Subframeworks) {
+    if (!StringRef(Path).ends_with(".framework"))
       continue;
 
-    if (auto SubframeworkDir = FileMgr.getOptionalDirectoryRef(Dir->path())) {
+    if (auto SubframeworkDir = FileMgr.getOptionalDirectoryRef(Path)) {
       // Note: as an egregious but useful hack, we use the real path here and
       // check whether it is actually a subdirectory of the parent directory.
       // This will not be the case if the 'subframework' is actually a symlink
@@ -2166,7 +2173,7 @@ void ModuleMapLoader::handleHeaderDecl(const modulemap::HeaderDecl &HD) {
 
 static bool compareModuleHeaders(const Module::Header &A,
                                  const Module::Header &B) {
-  return A.NameAsWritten < B.NameAsWritten;
+  return StringRef(A.NameAsWritten).compare_insensitive(B.NameAsWritten) < 0;
 }
 
 void ModuleMapLoader::handleUmbrellaDirDecl(
