@@ -3,7 +3,8 @@
 // and attaches attributes such as dllimport, even if the builtin is implicitly
 // declared noexcept while the C standard library declaration lacks noexcept.
 // Also test that calling the builtin without prior declaration in the AST
-// continues to work, falling back to an external symbol without dllimport.
+// continues to work, and automatically resolves MSVC CRT symbol names and
+// dllimport attributes when compiling under dynamic CRT (/MD / -D_DLL).
 
 // RUN: rm -rf %t && mkdir %t
 // RUN: split-file %s %t
@@ -17,9 +18,17 @@
 // 3. No math.h included: calling __builtin_hypotf directly works and emits external symbol without dllimport
 // RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fdeclspec -emit-llvm %t/direct_builtin.cpp -o - | FileCheck %s --check-prefix=CHECK-NO-DLLIMPORT
 
+// 4. No math.h included under /MD (-D_DLL) on x64: calling __builtin_hypotf directly automatically resolves dllimport
+// RUN: %clang_cc1 -triple x86_64-pc-windows-msvc -fdeclspec -D_DLL -emit-llvm %t/direct_builtin.cpp -o - | FileCheck %s --check-prefix=CHECK-DLLIMPORT
+
+// 5. No math.h included under /MD (-D_DLL) on 32-bit x86: calling __builtin_hypotf directly automatically resolves _hypotf and dllimport
+// RUN: %clang_cc1 -triple i686-pc-windows-msvc -fdeclspec -D_DLL -emit-llvm %t/direct_builtin.cpp -o - | FileCheck %s --check-prefix=CHECK-X86-DLLIMPORT
+
 // CHECK-DLLIMPORT: declare dllimport float @hypotf(float noundef, float noundef)
 
 // CHECK-NO-DLLIMPORT: declare dso_local float @hypotf(float noundef, float noundef)
+
+// CHECK-X86-DLLIMPORT: declare dllimport float @_hypotf(float noundef, float noundef)
 
 //--- math.h
 extern "C" __declspec(dllimport) float hypotf(float x, float y);
