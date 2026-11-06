@@ -2605,15 +2605,16 @@ bool LowerTypeTestsModule::lower() {
     if (CfiFunctionsMD) {
       // A set of all functions that are address taken by a live global object.
       DenseSet<GlobalValue::GUID> AddressTaken;
+      SmallVector<GlobalValue::GUID, 0> Aliasees;
       for (auto &I : *ExportSummary)
         for (auto &GVS : I.second.getSummaryList())
           if (GVS->isLive())
-            for (const auto &Ref : GVS->refs()) {
-              AddressTaken.insert(Ref.getGUID());
-              for (auto &RefGVS : Ref.getSummaryList())
-                if (auto Alias = dyn_cast<AliasSummary>(RefGVS.get()))
-                  AddressTaken.insert(Alias->getAliaseeGUID());
-            }
+            for (const auto &Ref : GVS->refs())
+              if (AddressTaken.insert(Ref.getGUID()).second)
+                for (auto &RefGVS : Ref.getSummaryList())
+                  if (auto Alias = dyn_cast<AliasSummary>(RefGVS.get()))
+                    Aliasees.push_back(Alias->getAliaseeGUID());
+      AddressTaken.insert_range(Aliasees);
       auto IsAddressTaken = [&](GlobalValue::GUID GUID) {
         if (AddressTaken.count(GUID))
           return true;
